@@ -78,16 +78,39 @@ def fetch_tweets(username, count=5, max_retries=3):
     # First try with ntscraper
     for attempt in range(max_retries):
         try:
-            scraper = Nitter()
-            # Try with both parameter styles
+            # Create scraper with specific instance to avoid random selection
+            scraper = Nitter(instance="https://nitter.net")  # Use a specific instance instead of random
+            
             try:
+                # Try the newer API format first
                 tweets_data = scraper.get_tweets(username, mode='user', number=count)
-            except TypeError:
-                # If first attempt fails, try alternative parameter format
-                tweets_data = scraper.get_tweets(username, count)
-                
-            if tweets_data and 'tweets' in tweets_data and tweets_data['tweets']:
-                return [tweet['text'] for tweet in tweets_data['tweets']]
+                if tweets_data and 'tweets' in tweets_data and tweets_data['tweets']:
+                    return [tweet['text'] for tweet in tweets_data['tweets']]
+            except (TypeError, AttributeError):
+                try:
+                    # Try the older API format as fallback
+                    tweets_data = scraper.get_tweets(username, count)
+                    if tweets_data and 'tweets' in tweets_data and tweets_data['tweets']:
+                        return [tweet['text'] for tweet in tweets_data['tweets']]
+                except Exception as e:
+                    st.warning(f"Error with older API format: {str(e)}")
+                    
+            # Try alternative instances if the first one fails
+            alternative_instances = [
+                "https://nitter.cz", 
+                "https://nitter.it",
+                "https://nitter.poast.org"
+            ]
+            
+            for instance in alternative_instances:
+                try:
+                    alt_scraper = Nitter(instance=instance)
+                    tweets_data = alt_scraper.get_tweets(username, mode='user', number=count)
+                    if tweets_data and 'tweets' in tweets_data and tweets_data['tweets']:
+                        return [tweet['text'] for tweet in tweets_data['tweets']]
+                except Exception:
+                    continue  # Try next instance
+                    
         except Exception as e:
             st.warning(f"Attempt {attempt+1}: {str(e)}")
             time.sleep(1)  # Wait between retries
@@ -190,7 +213,7 @@ def main():
         
         # Display batch results if available
         if "batch_results" in st.session_state and st.session_state.batch_results:
-            # Display batch results (same as before)
+            # Display batch results
             display_batch_results(st.session_state.batch_results)
     
     # Tab 3: Twitter Analysis
@@ -204,11 +227,26 @@ def main():
         username = st.text_input("Enter Twitter username (without @):")
         tweet_count = st.slider("Number of tweets to analyze:", min_value=1, max_value=10, value=5)
         
+        # Add option to use sample tweets directly
+        use_sample = st.checkbox("Use sample tweets (skip fetching)", value=False)
+        
         if st.button("Fetch & Analyze Tweets", type="primary"):
             if username:
                 with st.spinner(f"Fetching tweets from @{username}..."):
                     try:
-                        tweets = fetch_tweets(username, tweet_count)
+                        if use_sample:
+                            # Use sample tweets directly if checkbox is selected
+                            tweets = [
+                                f"I'm really enjoying using the products from {username}! #happy #customer",
+                                f"Just had a terrible experience with {username}'s customer service. Very disappointed.",
+                                f"The new release from {username} has some great features but also some bugs.",
+                                f"Can't believe how amazing {username}'s new product is! Absolutely worth every penny!",
+                                f"{username} needs to improve their response time. Been waiting for days for a reply."
+                            ][:tweet_count]
+                            st.info("Using sample tweets as requested.")
+                        else:
+                            # Try to fetch real tweets
+                            tweets = fetch_tweets(username, tweet_count)
                         
                         if tweets:
                             st.session_state.twitter_results = []
