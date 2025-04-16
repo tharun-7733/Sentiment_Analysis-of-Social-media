@@ -14,10 +14,10 @@ import time
 # Set page configuration
 st.set_page_config(
     page_title="Sentiment Analysis App",
-    page_icon="😊",
+    page_icon="😁",
     layout="wide"
 )
-
+     
 # Download resources and load model components
 @st.cache_resource
 def load_resources():
